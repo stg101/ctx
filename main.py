@@ -117,7 +117,10 @@ def ls(max_age):
     context_name = context["name"]
     date = context["date_str"]
     id = context["id"]
-    click.echo(f"{id}\t{date}\t{context_name}")
+    if date == today_str:
+      click.secho(f"{id}\t{date}\t{context_name}", fg='green')
+    else:
+      click.echo(f"{id}\t{date}\t{context_name}")
 
 @click.command()
 @click.argument('name')
