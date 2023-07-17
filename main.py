@@ -72,6 +72,24 @@ def list_contexts(begin_date=today, end_date=today):
 
   return list(filter(check_date, result_contexts))
 
+def fsearch(query):
+  return build_contexts()
+
+def format_search_result(ctx):
+  name = ctx["name"]
+  date = ctx["date_str"]
+  id = ctx["id"]
+  content = open(ctx['full_path'], "r").read()
+  content = ''.join(content.splitlines())
+  preview = pad_right(content, 30)
+  return f"{id}\t{date}\t{preview}\t{name}"
+
+def pad_right(text, count):
+  text = text[:count]
+  for i in range(count - len(text)):
+    text += ' '
+  return text
+
 def path_preview(name):
   return f"{contexts_dir}/{today}-{name}.ctx"
 
@@ -100,9 +118,18 @@ def open_command(name):
   context_path = path_preview(name)
   open_in_vim(context_path)
 
+@click.command(name='fsearch')
+@click.argument('query', default='')
+def fsearch_command(query):
+  contexts = fsearch(query)
+  for ctx in contexts:
+    click.echo(format_search_result(ctx))
+
 @click.command()
 @click.option('--max-age', default=math.inf, flag_value=1, is_flag=False,  show_default=True, help="Show contexts from last n days")
-def ls(max_age):
+@click.option('-sf','show_filenames', is_flag=True)
+@click.option('-sn','show_names', is_flag=True)
+def ls(max_age, show_filenames, show_names):
   contexts = []
   if max_age == math.inf:
     contexts = sort_contexts(build_contexts())
@@ -117,10 +144,17 @@ def ls(max_age):
     context_name = context["name"]
     date = context["date_str"]
     id = context["id"]
+    output_str = f"{id}\t{date}\t{context_name}"
+
+    if show_filenames:
+      output_str = context["filename"]
+    elif show_names:
+      output_str = context["name"]
+
     if date == today_str:
-      click.secho(f"{id}\t{date}\t{context_name}", fg='green')
+      click.secho(output_str, fg='green')
     else:
-      click.echo(f"{id}\t{date}\t{context_name}")
+      click.echo(output_str)
 
 @click.command()
 @click.argument('name')
@@ -154,6 +188,7 @@ context.add_command(open_command)
 context.add_command(ls)
 context.add_command(reuse)
 context.add_command(view)
+context.add_command(fsearch_command)
 
 if __name__ == '__main__':
     context()
