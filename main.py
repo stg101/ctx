@@ -1,5 +1,6 @@
 from subprocess import call
 from datetime import datetime, timedelta
+from fuzzysearch import find_near_matches
 import click
 import shutil
 import glob
@@ -54,8 +55,10 @@ def build_contexts():
   for path in contexts_paths():
     context_data = data_from_path(path)
     contexts.append(context_data)
+
+  contexts = sort_contexts(contexts)
   
-  for idx, context in enumerate(sort_contexts(contexts)):
+  for idx, context in enumerate(contexts):
     context['id'] = idx + 1
 
   return contexts 
@@ -73,16 +76,39 @@ def list_contexts(begin_date=today, end_date=today):
   return list(filter(check_date, result_contexts))
 
 def fsearch(query):
-  return build_contexts()
+  query = query.lower()
+  contexts = build_contexts()
+  results = []
+  max_l_dist = int(len(query) * 0.2)
+  for ctx in contexts:
+    content = open(ctx['full_path'], "r").read()
+    content_lower = content.lower()
+    matches = find_near_matches(query, content_lower, max_l_dist=max_l_dist)
+    matches_content = []
+    if len(matches) == 0: continue
+    for ctx_match in matches:
+      start = ctx_match.start - 10
+      if start < 0: start = 0
+      end = ctx_match.end + 60
+      if end >= len(content): end = len(content) - 1
+      match_txt = content[start:ctx_match.start] +\
+                  click.style(content[ctx_match.start:ctx_match.end], fg='red', bold=True) +\
+                  content[ctx_match.end:end]
+      matches_content.append(match_txt)
 
-def format_search_result(ctx):
+    matches_content = '\n⠇\n'.join(matches_content)
+    results.append((ctx, matches_content))
+
+  return results
+
+def format_search_result(ctx, content):
   name = ctx["name"]
   date = ctx["date_str"]
   id = ctx["id"]
-  content = open(ctx['full_path'], "r").read()
-  content = ''.join(content.splitlines())
-  preview = pad_right(content, 30)
-  return f"{id}\t{date}\t{preview}\t{name}"
+  preview = content
+  separator = "-----------------------------------------------------------"
+  header = click.style(f"{separator}\n{id}\t{date}\t{name}\n{separator}", fg='yellow', bold=True)
+  return f"{header}\n\n{preview}\n"
 
 def pad_right(text, count):
   text = text[:count]
@@ -119,11 +145,11 @@ def open_command(name):
   open_in_vim(context_path)
 
 @click.command(name='fsearch')
-@click.argument('query', default='')
+@click.argument('query', required=True)
 def fsearch_command(query):
-  contexts = fsearch(query)
-  for ctx in contexts:
-    click.echo(format_search_result(ctx))
+  results = fsearch(query)
+  for ctx, content in results:
+    click.echo(format_search_result(ctx, content))
 
 @click.command()
 @click.option('--max-age', default=math.inf, flag_value=1, is_flag=False,  show_default=True, help="Show contexts from last n days")
